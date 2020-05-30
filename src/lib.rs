@@ -66,7 +66,7 @@ impl FromStr for Time {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Day {
     Today,
     Tomorrow,
@@ -85,11 +85,13 @@ impl fmt::Display for Day {
     }
 }
 
+#[derive(Clone, Debug)]
 pub enum Specifier {
     Any,
     Only(usize),
 }
 
+#[derive(Clone, Debug)]
 pub struct Specification {
     minute: Specifier,
     hour: Specifier,
@@ -182,7 +184,77 @@ pub fn get_next_time(specification: Specification, current_time: &Time) -> (Time
 
 #[cfg(test)]
 mod tests {
+    use proptest::{
+        prop_assert, prop_oneof, proptest,
+        strategy::{BoxedStrategy, Just, Strategy},
+    };
+
     use super::*;
+
+    fn specifier_strategy(max_ordinal: usize) -> BoxedStrategy<Specifier> {
+        prop_oneof![
+            Just(Specifier::Any),
+            (0..max_ordinal).prop_map(|n| Specifier::Only(n)),
+        ]
+        .boxed()
+    }
+
+    fn specification_strategy() -> BoxedStrategy<Specification> {
+        (specifier_strategy(60), specifier_strategy(24))
+            .prop_map(|(minute, hour)| Specification { minute, hour })
+            .boxed()
+    }
+
+    fn time_strategy() -> BoxedStrategy<Time> {
+        (0..1440usize)
+            .prop_map(|minute_in_day| Time::new(minute_in_day))
+            .boxed()
+    }
+
+    // For proptest, lets pick a random spec and start time, and get the next time.
+    // Then check the following invariants:
+    // - The returned time actually matches the pattern
+    // - There are no earlier matches
+    proptest! {
+        #[test]
+        fn test_no_earlier_matches(
+            specification in specification_strategy(),
+            current_time in time_strategy()
+        ) {
+            let (next_time, day) = get_next_time(specification.clone(), &current_time);
+            // Check our return value actually matches
+            prop_assert!(
+                specification.matches(&next_time),
+                "Next time {} doesn't match specification.",
+                next_time,
+            );
+            // Check for earlier values
+            let mut check_time = next_time.clone();
+            let mut check_day = day.clone();
+            loop {
+                if (&check_time, &check_day) == (&current_time, &Day::Today) {
+                    // we reached our starting time without incident
+                    break;
+                }
+
+                // Move back one step
+                let mut check = check_time.minute_in_day();
+                if check == 0 && check_day == Day::Tomorrow {
+                    check = 1440;
+                    check_day = Day::Today;
+                };
+                check_time = Time::new(check - 1);
+
+                // Check if we have a new match
+                prop_assert!(
+                    !specification.matches(&check_time),
+                    "Said next time was {:?}, but found earlier match {:?}.",
+                    (&next_time, &day),
+                    (&check_time, &check_day)
+                );
+            }
+        }
+    }
 
     #[test]
     fn test_spec_any_minute_specific_hour() {
