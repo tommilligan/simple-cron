@@ -5,6 +5,8 @@ use anyhow::{anyhow, Context, Result};
 
 use simple_cron::{get_next_time, Specification, Specifier, Time};
 
+/// Convert '*' or an integer into a specifier, checking the integer is within
+/// the given range.
 fn parse_token(raw_token: &str, max_ordinal: usize) -> Result<Specifier> {
     match raw_token {
         "*" => Ok(Specifier::Any),
@@ -24,6 +26,7 @@ fn parse_token(raw_token: &str, max_ordinal: usize) -> Result<Specifier> {
     }
 }
 
+/// Parse a single specification line of the form `* 0 target`
 fn parse_line(line: &str) -> Result<(Specifier, Specifier, &str)> {
     let raw_parts: Vec<_> = line.splitn(3, ' ').collect();
     let minute = parse_token(
@@ -47,6 +50,8 @@ fn parse_line(line: &str) -> Result<(Specifier, Specifier, &str)> {
     Ok((minute, hour, target))
 }
 
+/// For each line from the reader, calculate the correct output and send it to
+/// writer.
 fn run<Reader: BufRead, Writer: Write>(
     reader: Reader,
     writer: &mut Writer,
@@ -57,12 +62,13 @@ fn run<Reader: BufRead, Writer: Write>(
         let (minute, hour, target) =
             parse_line(&line).with_context(|| format!("Failed to parse input line {}", index))?;
         let specification = Specification::new(minute, hour);
-        let (next_time, day) = get_next_time(specification, current_time);
+        let (next_time, day) = get_next_time(&specification, current_time);
         writer.write(format!("{} {} - {}\n", next_time, day, target).as_bytes())?;
     }
     Ok(())
 }
 
+/// Deal with I/O, thin wrapper around `run`.
 fn main() -> Result<()> {
     let args: Vec<String> = env::args().collect();
 
@@ -82,7 +88,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_spec_example() {
+    fn test_task_example() {
         let mut writer = Vec::new();
         run(
             r#"30 1 /bin/run_me_daily

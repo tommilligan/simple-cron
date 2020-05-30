@@ -6,6 +6,7 @@ use anyhow::{Context, Error, Result};
 const MINUTES_IN_HOUR: usize = 60;
 const MINUTES_IN_DAY: usize = 1440;
 
+/// Represents the current time in hours an minutes.
 #[derive(PartialEq, Eq, Clone)]
 pub struct Time {
     minute_in_day: usize,
@@ -45,6 +46,7 @@ impl fmt::Debug for Time {
     }
 }
 
+/// Get a `Time` from a `HH:MM` representation.
 impl FromStr for Time {
     type Err = Error;
 
@@ -66,6 +68,7 @@ impl FromStr for Time {
     }
 }
 
+/// Represents the day of the next trigger time.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Day {
     Today,
@@ -85,12 +88,14 @@ impl fmt::Display for Day {
     }
 }
 
+/// Represents a single token in the cron specification.
 #[derive(Clone, Debug)]
 pub enum Specifier {
     Any,
     Only(usize),
 }
 
+/// Represents the complete time portion of the cron specification.
 #[derive(Clone, Debug)]
 pub struct Specification {
     minute: Specifier,
@@ -119,33 +124,38 @@ impl Specification {
     }
 }
 
+/// Given a cron specification and the current time, return the next
+/// time this would be triggered.
 // TODO(tommilligan) This could be optimised by returning Cow<'a, Time>
 // for cases where the current time is valid
-pub fn get_next_time(specification: Specification, current_time: &Time) -> (Time, Day) {
+pub fn get_next_time(specification: &Specification, current_time: &Time) -> (Time, Day) {
     // Always check - if we match the current time, it's all good!
     if specification.matches(&current_time) {
         return (current_time.clone(), Day::Today);
     }
 
     // There are only 4 possible combinations, so let's just enumerate them!
+    // If I was going to implement this nicely, I'd do some sort of sweep-forward
+    // strategy, starting from the largest unit of time and working down.
     match &specification {
         // If the specifier is any, then we already returned above.
         Specification {
             minute: Specifier::Any,
             hour: Specifier::Any,
         } => panic!("all-Any specification didn't match current time."),
-        // If we get a specific time, just work out the next instance
-        // (as this will be unique in a given day).
+        // If we get a specific time, just construct it directly
         Specification {
             minute: Specifier::Only(minute),
             hour: Specifier::Only(hour),
         } => {
             let next_time = Time::new(hour * MINUTES_IN_HOUR + minute);
+            // It's tomorrow if the next_time is before the current time of day.
             let diff = next_time.minute_in_day() as isize - current_time.minute_in_day() as isize;
             let day = if diff < 0 { Day::Tomorrow } else { Day::Today };
             (next_time, day)
         }
-        // If we get any hour but a specific minute, work out the next instance
+        // If we get any hour but a specific minute, the next trigger is either
+        // this hour or the next hour
         Specification {
             minute: Specifier::Only(minute),
             hour: Specifier::Any,
@@ -157,6 +167,7 @@ pub fn get_next_time(specification: Specification, current_time: &Time) -> (Time
                 0
             }) * MINUTES_IN_HOUR
                 + minute;
+            // If this puts us over the length of a day, it's tomorrow
             let day = if next_time < MINUTES_IN_DAY {
                 Day::Today
             } else {
@@ -165,7 +176,8 @@ pub fn get_next_time(specification: Specification, current_time: &Time) -> (Time
             let next_time = Time::new(next_time);
             (next_time, day)
         }
-        // If we get a specific hour but any minute, work out the start of the next hour
+        // If we get a specific hour but any minute, the trigger time must be
+        // the start of the next hour
         Specification {
             minute: Specifier::Any,
             hour: Specifier::Only(hour),
@@ -211,7 +223,7 @@ mod tests {
             .boxed()
     }
 
-    // For proptest, lets pick a random spec and start time, and get the next time.
+    // Lets pick a random spec and start time, and get the next time.
     // Then check the following invariants:
     // - The returned time actually matches the pattern
     // - There are no earlier matches
@@ -221,7 +233,7 @@ mod tests {
             specification in specification_strategy(),
             current_time in time_strategy()
         ) {
-            let (next_time, day) = get_next_time(specification.clone(), &current_time);
+            let (next_time, day) = get_next_time(&specification, &current_time);
             // Check our return value actually matches
             prop_assert!(
                 specification.matches(&next_time),
@@ -260,21 +272,21 @@ mod tests {
     fn test_spec_any_minute_specific_hour() {
         assert_eq!(
             get_next_time(
-                Specification::new(Specifier::Any, Specifier::Only(12)),
+                &Specification::new(Specifier::Any, Specifier::Only(12)),
                 &"12:00".parse().unwrap()
             ),
             ("12:00".parse().unwrap(), Day::Today)
         );
         assert_eq!(
             get_next_time(
-                Specification::new(Specifier::Any, Specifier::Only(15)),
+                &Specification::new(Specifier::Any, Specifier::Only(15)),
                 &"12:00".parse().unwrap()
             ),
             ("15:00".parse().unwrap(), Day::Today)
         );
         assert_eq!(
             get_next_time(
-                Specification::new(Specifier::Any, Specifier::Only(9)),
+                &Specification::new(Specifier::Any, Specifier::Only(9)),
                 &"12:00".parse().unwrap()
             ),
             ("09:00".parse().unwrap(), Day::Tomorrow)
@@ -285,21 +297,21 @@ mod tests {
     fn test_spec_specific_minute_any_hour() {
         assert_eq!(
             get_next_time(
-                Specification::new(Specifier::Only(0), Specifier::Any),
+                &Specification::new(Specifier::Only(0), Specifier::Any),
                 &"12:00".parse().unwrap()
             ),
             ("12:00".parse().unwrap(), Day::Today)
         );
         assert_eq!(
             get_next_time(
-                Specification::new(Specifier::Only(7), Specifier::Any),
+                &Specification::new(Specifier::Only(7), Specifier::Any),
                 &"12:00".parse().unwrap()
             ),
             ("12:07".parse().unwrap(), Day::Today)
         );
         assert_eq!(
             get_next_time(
-                Specification::new(Specifier::Only(7), Specifier::Any),
+                &Specification::new(Specifier::Only(7), Specifier::Any),
                 &"23:57".parse().unwrap()
             ),
             ("00:07".parse().unwrap(), Day::Tomorrow)
@@ -307,24 +319,24 @@ mod tests {
     }
 
     #[test]
-    fn test_spec_specific() {
+    fn test_spec_specific_minute_specific_hour() {
         assert_eq!(
             get_next_time(
-                Specification::new(Specifier::Only(0), Specifier::Only(12)),
+                &Specification::new(Specifier::Only(0), Specifier::Only(12)),
                 &"12:00".parse().unwrap()
             ),
             ("12:00".parse().unwrap(), Day::Today)
         );
         assert_eq!(
             get_next_time(
-                Specification::new(Specifier::Only(13), Specifier::Only(13)),
+                &Specification::new(Specifier::Only(13), Specifier::Only(13)),
                 &"12:00".parse().unwrap()
             ),
             ("13:13".parse().unwrap(), Day::Today)
         );
         assert_eq!(
             get_next_time(
-                Specification::new(Specifier::Only(11), Specifier::Only(11)),
+                &Specification::new(Specifier::Only(11), Specifier::Only(11)),
                 &"12:00".parse().unwrap()
             ),
             ("11:11".parse().unwrap(), Day::Tomorrow)
@@ -332,17 +344,17 @@ mod tests {
     }
 
     #[test]
-    fn test_spec_any() {
+    fn test_spec_any_minute_any_hour() {
         assert_eq!(
             get_next_time(
-                Specification::new(Specifier::Any, Specifier::Any),
+                &Specification::new(Specifier::Any, Specifier::Any),
                 &"00:00".parse().unwrap()
             ),
             ("00:00".parse().unwrap(), Day::Today)
         );
         assert_eq!(
             get_next_time(
-                Specification::new(Specifier::Any, Specifier::Any),
+                &Specification::new(Specifier::Any, Specifier::Any),
                 &"23:59".parse().unwrap()
             ),
             ("23:59".parse().unwrap(), Day::Today)
