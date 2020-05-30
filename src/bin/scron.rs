@@ -1,5 +1,5 @@
 use std::env;
-use std::io::{self, BufRead};
+use std::io::{self, BufRead, Write};
 
 use anyhow::{anyhow, Context, Result};
 
@@ -47,6 +47,22 @@ fn parse_line(line: &str) -> Result<(Specifier, Specifier, &str)> {
     Ok((minute, hour, target))
 }
 
+fn run<Reader: BufRead, Writer: Write>(
+    reader: Reader,
+    writer: &mut Writer,
+    current_time: &Time,
+) -> Result<()> {
+    for (index, line) in reader.lines().enumerate() {
+        let line = line.with_context(|| format!("Failed to get line {}", index))?;
+        let (minute, hour, target) =
+            parse_line(&line).with_context(|| format!("Failed to parse input line {}", index))?;
+        let specification = Specification::new(minute, hour);
+        let (next_time, day) = get_next_time(specification, current_time);
+        writer.write(format!("{} {} - {}\n", next_time, day, target).as_bytes())?;
+    }
+    Ok(())
+}
+
 fn main() -> Result<()> {
     let args: Vec<String> = env::args().collect();
 
@@ -54,14 +70,38 @@ fn main() -> Result<()> {
     let current_time: Time = raw_time.parse()?;
 
     let stdin = io::stdin();
-    for (index, line) in stdin.lock().lines().enumerate() {
-        let line = line.with_context(|| format!("Failed to get line {}", index))?;
-        let (minute, hour, target) =
-            parse_line(&line).with_context(|| format!("Failed to parse input line {}", index))?;
-        let specification = Specification::new(minute, hour);
-        let (next_time, day) = get_next_time(specification, &current_time);
-        println!("{} {} - {}", next_time, day, target);
-    }
+    let reader = stdin.lock();
+    let stdout = io::stdout();
+    let mut writer = stdout.lock();
 
-    Ok(())
+    run(reader, &mut writer, &current_time)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_spec_example() {
+        let mut writer = Vec::new();
+        run(
+            r#"30 1 /bin/run_me_daily
+45 * /bin/run_me_hourly
+* * /bin/run_me_every_minute
+* 19 /bin/run_me_sixty_times
+"#
+            .as_bytes(),
+            &mut writer,
+            &"16:10".parse().unwrap(),
+        )
+        .unwrap();
+        assert_eq!(
+            String::from_utf8(writer).unwrap(),
+            r#"1:30 tomorrow - /bin/run_me_daily
+16:45 today - /bin/run_me_hourly
+16:10 today - /bin/run_me_every_minute
+19:00 today - /bin/run_me_sixty_times
+"#
+        );
+    }
 }

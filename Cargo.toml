@@ -8,3 +8,6 @@ edition = "2018"
 
 [dependencies]
 anyhow = "1.0.26"
+
+[dev-dependencies]
+proptest = "0.10.0"

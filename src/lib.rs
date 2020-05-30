@@ -33,7 +33,9 @@ impl Time {
 
 impl fmt::Display for Time {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:02}:{:02}", self.hours(), self.minutes())
+        // TODO(tommilligan) Hours are poorly formatted deliberately
+        // as one of the test examples given was output as `1:30`.
+        write!(f, "{}:{:02}", self.hours(), self.minutes())
     }
 }
 
