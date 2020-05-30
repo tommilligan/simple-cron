@@ -3,7 +3,7 @@ use std::io::{self, BufRead};
 
 use anyhow::{anyhow, Context, Result};
 
-use simple_cron::{get_next_time, Specifier, MINUTES_IN_HOUR};
+use simple_cron::{get_next_time, Specification, Specifier, MINUTES_IN_HOUR};
 
 fn parse_token(raw_token: &str, max_ordinal: usize) -> Result<Specifier> {
     match raw_token {
@@ -69,7 +69,8 @@ fn main() -> Result<()> {
         let line = line.with_context(|| format!("Failed to get line {}", index))?;
         let (minute, hour, target) =
             parse_line(&line).with_context(|| format!("Failed to parse input line {}", index))?;
-        let (next_time, day) = get_next_time(minute, hour, time);
+        let specification = Specification::new(minute, hour);
+        let (next_time, day) = get_next_time(specification, time);
         println!(
             "{}:{} {} - {}",
             next_time / MINUTES_IN_HOUR,
