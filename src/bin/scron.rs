@@ -3,7 +3,7 @@ use std::io::{self, BufRead};
 
 use anyhow::{anyhow, Context, Result};
 
-use simple_cron::{get_next_time, Specification, Specifier, MINUTES_IN_HOUR};
+use simple_cron::{get_next_time, Specification, Specifier, Time, MINUTES_IN_HOUR};
 
 fn parse_token(raw_token: &str, max_ordinal: usize) -> Result<Specifier> {
     match raw_token {
@@ -51,18 +51,7 @@ fn main() -> Result<()> {
     let args: Vec<String> = env::args().collect();
 
     let raw_time = args.get(1).expect("Expected one argument to be given.");
-    let raw_parts: Vec<_> = raw_time.splitn(2, ':').collect();
-    let hours: usize = raw_parts
-        .get(0)
-        .expect("Expected hours in raw string.")
-        .parse()
-        .expect("Expected hours to be a number.");
-    let minutes: usize = raw_parts
-        .get(1)
-        .expect("Expected minutes in raw string.")
-        .parse()
-        .expect("Expected minutes to be a number.");
-    let time = hours * MINUTES_IN_HOUR + minutes;
+    let current_time: Time = raw_time.parse()?;
 
     let stdin = io::stdin();
     for (index, line) in stdin.lock().lines().enumerate() {
@@ -70,14 +59,8 @@ fn main() -> Result<()> {
         let (minute, hour, target) =
             parse_line(&line).with_context(|| format!("Failed to parse input line {}", index))?;
         let specification = Specification::new(minute, hour);
-        let (next_time, day) = get_next_time(specification, time);
-        println!(
-            "{}:{} {} - {}",
-            next_time / MINUTES_IN_HOUR,
-            next_time % MINUTES_IN_HOUR,
-            day,
-            target
-        );
+        let (next_time, day) = get_next_time(specification, &current_time);
+        println!("{} {} - {}", next_time, day, target);
     }
 
     Ok(())
