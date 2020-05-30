@@ -3,8 +3,8 @@ use std::str::FromStr;
 
 use anyhow::{Context, Error, Result};
 
-pub const MINUTES_IN_HOUR: usize = 60;
-pub const MINUTES_IN_DAY: usize = 1440;
+const MINUTES_IN_HOUR: usize = 60;
+const MINUTES_IN_DAY: usize = 1440;
 
 #[derive(PartialEq, Eq, Clone)]
 pub struct Time {

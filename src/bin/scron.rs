@@ -3,7 +3,7 @@ use std::io::{self, BufRead};
 
 use anyhow::{anyhow, Context, Result};
 
-use simple_cron::{get_next_time, Specification, Specifier, Time, MINUTES_IN_HOUR};
+use simple_cron::{get_next_time, Specification, Specifier, Time};
 
 fn parse_token(raw_token: &str, max_ordinal: usize) -> Result<Specifier> {
     match raw_token {
