@@ -1,19 +1,27 @@
 use std::env;
 use std::io::{self, BufRead};
 
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 
 use simple_cron::{get_next_time, Specifier, MINUTES_IN_HOUR};
 
-fn parse_token(raw_token: &str) -> Result<Specifier> {
-    Ok(match raw_token {
-        "*" => Specifier::Any,
-        raw_token => Specifier::Only(
-            raw_token
+fn parse_token(raw_token: &str, max_ordinal: usize) -> Result<Specifier> {
+    match raw_token {
+        "*" => Ok(Specifier::Any),
+        raw_token => {
+            let number = raw_token
                 .parse()
-                .with_context(|| format!("Invalid number."))?,
-        ),
-    })
+                .with_context(|| format!("Invalid number."))?;
+            match number {
+                x if x < max_ordinal => Ok(Specifier::Only(number)),
+                _ => Err(anyhow!(
+                    "Number {} outside of range {}.",
+                    number,
+                    max_ordinal
+                )),
+            }
+        }
+    }
 }
 
 fn parse_line(line: &str) -> Result<(Specifier, Specifier, &str)> {
@@ -22,14 +30,16 @@ fn parse_line(line: &str) -> Result<(Specifier, Specifier, &str)> {
         raw_parts
             .get(0)
             .with_context(|| format!("No minute value."))?,
+        60,
     )
     .with_context(|| format!("Invalid minute specifier."))?;
     let hour = parse_token(
         raw_parts
             .get(1)
             .with_context(|| format!("No hour value."))?,
+        24,
     )
-    .with_context(|| format!("Invalid minute specifier."))?;
+    .with_context(|| format!("Invalid hour specifier."))?;
     let target: &str = *raw_parts
         .get(2)
         .with_context(|| format!("No target value."))?;
