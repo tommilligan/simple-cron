@@ -1,5 +1,7 @@
 # simple-cron
 
+Simple `cron`-like implementation.
+
 ## Challenge
 
 We have a set of tasks, each running at least daily, which are scheduled with a simplified cron. We want to find when each of them will next run.
