@@ -43,8 +43,8 @@ fn run<Reader: BufRead, Writer: Write>(
             parse_line(&line).with_context(|| format!("Failed to parse input line {}", index))?;
         let specification = Specification::new(minute, hour);
         let (next_time, day) = get_next_time(&specification, current_time);
-        // TODO(tommilligan) The hours are not padded here specifically
-        // to make the given example in the task pass.
+        // TODO(tommilligan) Quick hack to dump some proptest examples for benching.
+        // See if there's a better way to do this?
         writer.write(
             format!(
                 "{}:{:02} {} - {}\n",
@@ -101,6 +101,8 @@ mod tests {
         fn test_input_fuzz(
             line in line_strategy(),
         ) {
+            // TODO(tommilligan) write out examples to sterr to use in benchmark
+            // io::stderr().write_all(line.as_bytes()).unwrap();
             let mut writer = Vec::new();
             run(
                 line.as_bytes(),
