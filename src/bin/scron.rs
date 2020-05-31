@@ -76,7 +76,40 @@ fn main() -> Result<()> {
 
 #[cfg(test)]
 mod tests {
+    use proptest::{
+        prop_oneof, proptest,
+        strategy::{BoxedStrategy, Just, Strategy},
+    };
+
     use super::*;
+
+    fn line_strategy() -> BoxedStrategy<String> {
+        (
+            prop_oneof![Just("*".to_owned()), (0..60u32).prop_map(|n| n.to_string())],
+            prop_oneof![Just("*".to_owned()), (0..24u32).prop_map(|n| n.to_string())],
+            "\\PC+",
+        )
+            .prop_map(|(minute, hour, target)| format!("{} {} {}\n", minute, hour, target))
+            .boxed()
+    }
+
+    // Let's fuzz the input lines to check our parsing logic is sound
+    // For this test we don't care if the output is correct, just that
+    // it doesn't crash.
+    proptest! {
+        #[test]
+        fn test_input_fuzz(
+            line in line_strategy(),
+        ) {
+            let mut writer = Vec::new();
+            run(
+                line.as_bytes(),
+                &mut writer,
+                &NaiveTime::from_hms(12, 34, 0),
+            )
+            .unwrap();
+        }
+    }
 
     #[test]
     fn test_task_example() {
