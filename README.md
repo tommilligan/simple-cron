@@ -28,7 +28,16 @@ For example given the above examples as input and the simulated 'current time' c
 
 ## Solution design
 
+The source code is split into the following:
 
+- `src/bin/scron.rs` is concerned with IO, parsing cli arguments and formatting the output.
+    - due to Rust's nice IO traits, the `run` function can be reused for input fuzzing tests using in-memory buffers
+- `src/lib.rs` is concerned with the actual logic of `cron`
+
+There are two kinds of tests present:
+
+- unit tests written while developing the solution, which manually cover the expected cases
+- property-based tests using `proptest`, which aim to generate new or exciting cases automatically
 
 ## Benchmarking
 
