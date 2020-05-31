@@ -6,7 +6,7 @@
 set -e
 
 echo >&2 "Generating benchmark input"
-rm bench/bench-input-large.lines
+rm -rf bench/bench-input-large.lines
 for i in {1..4000}; do cat bench/bench-input.lines; done > bench/bench-input-large.lines
 
 echo >&2 "Running benchmark"
